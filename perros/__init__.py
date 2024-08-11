@@ -21,14 +21,12 @@ def fecha():
 
     # Convierte la fecha y hora actuales a la zona horaria de España
     fecha_hoy = fecha_hoy_utc.astimezone(zona_horaria_españa)
-    # logging.info(f"Comenzando ejecución a fecha {fecha_hoy}")
 
     # Incrementa la fecha actual en un día
     fecha_hoy = fecha_hoy + timedelta(days=1)
-    # logging.info(f"Planificando para {fecha_hoy}")
-
+    
     fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
-
+    logging.debug(f"Fecha calculada: {fecha_hoy}")
     return fecha_hoy
 
 def conexionBreezeway():
@@ -40,9 +38,15 @@ def conexionBreezeway():
     headers = {
         'Content-Type': 'application/json'
     }
-    response = requests.post(endpoint, json=payload, headers=headers)
-    token = response.json().get('access_token')
-    return token
+    try:
+        response = requests.post(endpoint, json=payload, headers=headers)
+        response.raise_for_status()  # Raises HTTPError for bad responses
+        token = response.json().get('access_token')
+        logging.info("Conexión a Breezeway exitosa. Token obtenido.")
+        return token
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error al conectar a Breezeway: {str(e)}")
+        raise
 
 def haySalidahoy(propertyID, token):
     fecha_hoy = fecha()
@@ -51,16 +55,20 @@ def haySalidahoy(propertyID, token):
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'  # Asegúrate de que este es el tipo de token correcto
     }
-    response = requests.get(endpoint, headers=headers)
-    if response.status_code in [200, 201, 202, 204]:
+    try:
+        response = requests.get(endpoint, headers=headers)
+        response.raise_for_status()
         reservas = response.json()
         for reserva in reservas:
             if reserva["checkout_date"] == fecha_hoy:
                 revisarPerro(reserva["reference_reservation_id"], propertyID, token)
+                logging.info(f"Reserva con salida hoy encontrada: {reserva}")
                 return True
+        logging.info(f"No hay reservas con salida para hoy en la propiedad {propertyID}")
         return False
-    else:
-        raise Exception(f"Error al consultar reservas: {response.status_code} - {response.text}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error al consultar reservas para propiedad {propertyID}: {str(e)}")
+        raise
 
 def revisarPerro(idReserva, propertyID, token):
     url = f"https://api.hostaway.com/v1/financeField/{idReserva}"
@@ -69,14 +77,20 @@ def revisarPerro(idReserva, propertyID, token):
         'Content-type': "application/json",
         'Cache-control': "no-cache",
     }
-    response = requests.get(url, headers=headers)
-    data = response.json()['result']
-    
-    for element in data:
-        if element['name'] == "petFee":
-            marcarPerro(propertyID, token)
-            return True
-    return False
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json().get('result', [])
+        for element in data:
+            if element['name'] == "petFee":
+                logging.info(f"Pet fee encontrado para reserva {idReserva}")
+                marcarPerro(propertyID, token)
+                return True
+        logging.info(f"No se encontró pet fee para reserva {idReserva}")
+        return False
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error al revisar perro para reserva {idReserva}: {str(e)}")
+        raise
 
 def marcarPerro(propertyID, token):
     fecha_hoy = fecha()  # Asegúrate de que se actualiza
@@ -86,27 +100,33 @@ def marcarPerro(propertyID, token):
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
     }
-    response = requests.get(endpoint, headers=headers)
-    data = response.json().get('result', [])
-    for element in data:
-        if element["template_id"] == 101204:
-            taskID = element["id"]
-            nombreTarea = element["name"]
-            cambiarNombreTarea(taskID, nombreTarea, token)
+    try:
+        response = requests.get(endpoint, headers=headers)
+        response.raise_for_status()
+        data = response.json().get('result', [])
+        for element in data:
+            if element["template_id"] == 101204:
+                taskID = element["id"]
+                nombreTarea = element["name"]
+                cambiarNombreTarea(taskID, nombreTarea, token)
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error al marcar perro para propiedad {propertyID}: {str(e)}")
+        raise
 
 def cambiarNombreTarea(taskId, nombreTarea, token):
     fecha_hoy = fecha()
     nombreConPerro = "🐶" + nombreTarea 
-    # logging.info(f"Moviendo tarea {taskId}")
     endpoint = URL + f"public/inventory/v1/task/{taskId}"
     headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
     payload = {"name": nombreConPerro}
-    response = requests.patch(endpoint, json=payload, headers=headers)
-    logging.info(f"Respuesta cambiando nombre: {response.text} {response.status_code}")
-    if response.status_code in [200, 201, 202, 204]:
+    try:
+        response = requests.patch(endpoint, json=payload, headers=headers)
+        response.raise_for_status()
+        logging.info(f"Tarea {taskId} cambiada a {nombreConPerro} exitosamente.")
         return f"Tarea {taskId} cambiada nombre. {response.status_code}"
-    else:
-        return f"Error cambiando nombre de {taskId}: {response.status_code} {response.text}"
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error cambiando nombre de tarea {taskId}: {str(e)}")
+        raise
 
 def conseguirPropiedades(token):
     endpoint = URL + f"public/inventory/v1/property?company_id={COMPANY_ID}&limit=350"
@@ -114,21 +134,24 @@ def conseguirPropiedades(token):
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
     }
-    response = requests.get(endpoint, headers=headers)
-    return response.json()
+    try:
+        response = requests.get(endpoint, headers=headers)
+        response.raise_for_status()
+        logging.info("Propiedades obtenidas con éxito.")
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error al conseguir propiedades: {str(e)}")
+        raise
 
 def main(myTimer: func.TimerRequest) -> None:
     logging.info("Iniciando la función principal")
     
     # Obtener el token de autenticación
-    token = conexionBreezeway()
-    updates_log = []
-    fecha_hoy = fecha()
+    try:
+        token = conexionBreezeway()
+        updates_log = []
+        fecha_hoy = fecha()
 
-    # Verificar si se obtuvo el token correctamente
-    if token:
-        logging.info("Token obtenido con éxito")
-        
         # Obtener las propiedades
         propiedades = conseguirPropiedades(token)
         logging.info(f"Propiedades obtenidas: {len(propiedades['results'])} encontradas")
@@ -139,6 +162,7 @@ def main(myTimer: func.TimerRequest) -> None:
             
             # Verificar que la propiedad sea activa
             if propertyID is None or propiedad["status"] != "active":
+                logging.debug(f"Propiedad {propertyID} inactiva o no válida.")
                 continue
             
             # Comprobar si hay salida hoy
@@ -151,6 +175,6 @@ def main(myTimer: func.TimerRequest) -> None:
                 logging.error(f"Error procesando propiedad {propertyID}: {str(e)}")
                 updates_log.append(f"Error en {propertyID}: {str(e)}")
 
-    else:
-        logging.error("Error al acceder a Breezeway")
+    except Exception as e:
+        logging.error(f"Error general: {str(e)}")
         raise BaseException("Error al acceder a Breezeway")
