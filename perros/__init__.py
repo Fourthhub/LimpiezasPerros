@@ -121,7 +121,6 @@ def marcarPerro(propertyID, token):
         'Authorization': f'JWT {token}'
     }
 
-    logging.info("endpoint:" + endpoint)
 
     try:
         response = requests.get(endpoint, headers=headers)
@@ -139,6 +138,7 @@ def marcarPerro(propertyID, token):
 
 def cambiarNombreTarea(taskId, nombreTarea, token):
     fecha_hoy = fecha()
+    logging.info("nombre de la tarea:" + nombreTarea)
     nombreConPerro = "🐶" + nombreTarea 
     endpoint = URL + f"public/inventory/v1/task/{taskId}"
     headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
