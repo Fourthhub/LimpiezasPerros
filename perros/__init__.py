@@ -137,21 +137,52 @@ def marcarPerro(propertyID, token):
         raise
 
 def cambiarNombreTarea(taskId, nombreTarea, token):
+    # Ensure all parameters are the expected types
+    assert isinstance(taskId, int), f"Expected taskId to be int, got {type(taskId)}"
+    assert isinstance(nombreTarea, str), f"Expected nombreTarea to be str, got {type(nombreTarea)}"
+    assert isinstance(token, str), f"Expected token to be str, got {type(token)}"
+
     fecha_hoy = fecha()
-    logging.info("nombre de la tarea:" + nombreTarea)
-    nombreConPerro = "🐶" + nombreTarea 
-    endpoint = URL + f"public/inventory/v1/task/{taskId}"
-    headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
+    
+    # Log the type and value of nombreTarea
+    logging.info(f"nombre de la tarea: {nombreTarea}, type: {type(nombreTarea)}")
+    
+    # Ensure taskId is a string for concatenation
+    taskId_str = str(taskId)
+
+    # Add a prefix to the task name
+    nombreConPerro = "🐶" + nombreTarea
+    
+    # Build the endpoint with taskId as a string
+    endpoint = URL + f"public/inventory/v1/task/{taskId_str}"
+    
+    # Log the constructed endpoint and payload
+    logging.debug(f"PATCH endpoint: {endpoint}")
+    logging.debug(f"Payload: {payload}")
+    
+    # Set up the request headers
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'JWT {token}'
+    }
+    
+    # Construct the payload
     payload = {"name": nombreConPerro}
+
     try:
+        # Make the PATCH request
         response = requests.patch(endpoint, json=payload, headers=headers)
         response.raise_for_status()
-        logging.info(f"Tarea {taskId} cambiada a {nombreConPerro} exitosamente.")
-        return f"Tarea {taskId} cambiada nombre. {response.status_code}"
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error cambiando nombre de tarea {taskId}: {str(e)}")
-        raise
 
+        # Log the success
+        logging.info(f"Tarea {taskId_str} cambiada a {nombreConPerro} exitosamente.")
+        
+        # Return a success message
+        return f"Tarea {taskId_str} cambiada nombre. {response.status_code}"
+    except requests.exceptions.RequestException as e:
+        # Log the error with details
+        logging.error(f"Error cambiando nombre de tarea {taskId_str}: {str(e)}")
+        raise
 def conseguirPropiedades(token):
     endpoint = URL + f"public/inventory/v1/property?company_id={COMPANY_ID}&limit=350"
     headers = {
