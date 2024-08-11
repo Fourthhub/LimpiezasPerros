@@ -126,7 +126,8 @@ def marcarPerro(propertyID, token):
         response.raise_for_status()
         data = response.json().get('result', [])
         for element in data:
-            if element["template_id"] == 101204:
+            logging.info("template id:" + element["template_id"])
+            if element["template_id"] == "101204":
                 taskID = element["id"]
                 nombreTarea = element["name"]
                 cambiarNombreTarea(taskID, nombreTarea, token)
