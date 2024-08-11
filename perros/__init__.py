@@ -121,6 +121,8 @@ def marcarPerro(propertyID, token):
         'Authorization': f'JWT {token}'
     }
 
+    logging.info("endpoint:" + endpoint)
+
     try:
         response = requests.get(endpoint, headers=headers)
         response.raise_for_status()
