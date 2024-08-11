@@ -81,7 +81,7 @@ def haySalidahoy(propertyID, token):
         reservas = response.json()
         for reserva in reservas:
             if reserva["checkout_date"] == fecha_hoy:
-                revisarPerro(reserva["reference_reservation_id"], propertyID,token)
+                revisarPerro(reserva["reference_reservation_id"], propertyID, token)
                 logging.info(f"Reserva con salida hoy encontrada: {reserva}")
                 return True
         logging.info(f"No hay reservas con salida para hoy en la propiedad {propertyID}")
@@ -90,7 +90,7 @@ def haySalidahoy(propertyID, token):
         logging.error(f"Error al consultar reservas para propiedad {propertyID}: {str(e)}")
         raise
 
-def revisarPerro(idReserva, propertyID,token):
+def revisarPerro(idReserva, propertyID, token):
     global hostaway_token  # Usa la variable global para el token de Hostaway
     url = f"https://api.hostaway.com/v1/financeField/{idReserva}"
     headers = {
@@ -115,7 +115,7 @@ def revisarPerro(idReserva, propertyID,token):
 
 def marcarPerro(propertyID, token):
     fecha_hoy = fecha()  # Asegúrate de que se actualiza
-    endpoint = URL + f"/public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={fecha_hoy},{fecha_hoy}"
+    endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={fecha_hoy},{fecha_hoy}"
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
@@ -124,9 +124,9 @@ def marcarPerro(propertyID, token):
         response = requests.get(endpoint, headers=headers)
         response.raise_for_status()
         data = response.json().get('result', [])
-        logging.info("respuestaa: " + data)
+        logging.info("respuestaa: " + str(data))  # Convierte la lista a string para el log
         for element in data:
-            logging.info("template id:" + element["template_id"])
+            logging.info("template id: " + str(element["template_id"]))  # Asegúrate de convertir el id a string
             if element["template_id"] == "101204":
                 taskID = element["id"]
                 nombreTarea = element["name"]
@@ -185,20 +185,3 @@ def main(myTimer: func.TimerRequest) -> None:
             propertyID = propiedad["reference_property_id"]
             
             # Verificar que la propiedad sea activa
-            if propertyID is None or propiedad["status"] != "active":
-                logging.debug(f"Propiedad {propertyID} inactiva o no válida.")
-                continue
-            
-            # Comprobar si hay salida hoy
-            try:
-                if haySalidahoy(propertyID, token):
-                    logging.info(f"Salida encontrada para la propiedad {propertyID}")
-                else:
-                    logging.info(f"No hay salida hoy para la propiedad {propertyID}")
-            except Exception as e:
-                logging.error(f"Error e propiedad {propertyID}: {str(e)}")
-                updates_log.append(f"Error en {propertyID}: {str(e)}")
-
-    except Exception as e:
-        logging.error(f"Error general: {str(e)}")
-        raise BaseException("Error al acceder a los servicios")
