@@ -184,7 +184,7 @@ def main(myTimer: func.TimerRequest) -> None:
         for propiedad in propiedades["results"]:
             propertyID = propiedad["reference_property_id"]
             
-            # Verificar que la propiedad sea activa
+            # Verificar que la propiedad sea activadsa
         if propertyID is None or propiedad["status"] != "active":
             logging.debug(f"Propiedad {propertyID} inactiva o no válida.")
             continue
