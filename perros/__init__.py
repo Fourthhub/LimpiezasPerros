@@ -151,7 +151,7 @@ def cambiarNombreTarea(taskId, nombreTarea, token):
     taskId_str = str(taskId)
 
     # Add a prefix to the task name
-    nombreConPerro = "🐶" + nombreTarea
+    nombreConPerro = "🐶" + nombreTarea + " (Perro)"
     
     # Build the endpoint with taskId as a string
     endpoint = URL + f"public/inventory/v1/task/{taskId_str}"
