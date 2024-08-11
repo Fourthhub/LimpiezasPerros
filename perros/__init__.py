@@ -126,7 +126,7 @@ def marcarPerro(propertyID, token):
     try:
         response = requests.get(endpoint, headers=headers)
         response.raise_for_status()
-        data = response.json().get('result', [])
+        data = response.json().get('results', [])
         logging.info(data)
         for element in data:
             logging.info("template id:" + element["template_id"])
