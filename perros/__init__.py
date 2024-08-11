@@ -185,3 +185,19 @@ def main(myTimer: func.TimerRequest) -> None:
             propertyID = propiedad["reference_property_id"]
             
             # Verificar que la propiedad sea activa
+        if propertyID is None or propiedad["status"] != "active":
+            logging.debug(f"Propiedad {propertyID} inactiva o no válida.")
+            continue
+        
+        # Comprobar si hay salida hoy
+        try:
+            if haySalidahoy(propertyID, token):
+                logging.info(f"Salida encontrada para la propiedad {propertyID}")
+            else:
+                logging.info(f"No hay salida hoy para la propiedad {propertyID}")
+        except Exception as e:
+            logging.error(f"Error procesando propiedad {propertyID}: {str(e)}")
+            updates_log.append(f"Error en {propertyID}: {str(e)}")
+        except Exception as e:
+         logging.error(f"Error general: {str(e)}")
+         raise BaseException("Error al acceder a los servicios")
