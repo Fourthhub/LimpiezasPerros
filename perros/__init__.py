@@ -115,7 +115,7 @@ def revisarPerro(idReserva, propertyID, token):
 
 def marcarPerro(propertyID, token):
     fecha_hoy = fecha()  # Asegúrate de que se actualiza
-    endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={fecha_hoy},{fecha_hoy}"
+    endpoint = URL + f"/public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={fecha_hoy},{fecha_hoy}"
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
@@ -127,7 +127,7 @@ def marcarPerro(propertyID, token):
         logging.info("respuestaa: " + str(data))  # Convierte la lista a string para el log
         for element in data:
             logging.info("template id: " + str(element["template_id"]))  # Asegúrate de convertir el id a string
-            if element["template_id"] == "101204":
+            if str(element["template_id"]) == "101204":  # Convertir a string para comparación
                 taskID = element["id"]
                 nombreTarea = element["name"]
                 cambiarNombreTarea(taskID, nombreTarea, token)
@@ -184,20 +184,21 @@ def main(myTimer: func.TimerRequest) -> None:
         for propiedad in propiedades["results"]:
             propertyID = propiedad["reference_property_id"]
             
-            # Verificar que la propiedad sea activadsa
-        if propertyID is None or propiedad["status"] != "active":
-            logging.debug(f"Propiedad {propertyID} inactiva o no válida.")
-            continue
-        
-        # Comprobar si hay salida hoy
-        try:
-            if haySalidahoy(propertyID, token):
-                logging.info(f"Salida encontrada para la propiedad {propertyID}")
-            else:
-                logging.info(f"No hay salida hoy para la propiedad {propertyID}")
-        except Exception as e:
-            logging.error(f"Error procesando propiedad {propertyID}: {str(e)}")
-            updates_log.append(f"Error en {propertyID}: {str(e)}")
-        except Exception as e:
-         logging.error(f"Error general: {str(e)}")
-         raise BaseException("Error al acceder a los servicios")
+            # Verificar que la propiedad sea activa
+            if propertyID is None or propiedad["status"] != "active":
+                logging.debug(f"Propiedad {propertyID} inactiva o no válida.")
+                continue
+            
+            # Comprobar si hay salida hoy
+            try:
+                if haySalidahoy(propertyID, token):
+                    logging.info(f"Salida encontrada para la propiedad {propertyID}")
+                else:
+                    logging.info(f"No hay salida hoy para la propiedad {propertyID}")
+            except Exception as e:
+                logging.error(f"Error procesando propiedad {propertyID}: {str(e)}")
+                updates_log.append(f"Error en {propertyID}: {str(e)}")
+
+    except Exception as e:
+        logging.error(f"Error general: {str(e)}")
+        raise BaseException("Error al acceder a los servicios")
