@@ -139,7 +139,7 @@ def marcarPerro(propertyID, token):
 def cambiarNombreTarea(taskId, nombreTarea, token):
     fecha_hoy = fecha()
     logging.info("nombre de la tarea:" + nombreTarea)
-    nombreConPerro = "🐶" + nombreTarea + " (Perro) " 
+    nombreConPerro = nombreTarea + " (Perro) " 
     endpoint = URL + f"public/inventory/v1/task/{taskId}"
     headers = {'Content-Type': 'application/json', 'Authorization': f'JWT {token}'}
     payload = {"name": nombreConPerro}
