@@ -81,7 +81,7 @@ def haySalidahoy(propertyID, token):
         reservas = response.json()
         for reserva in reservas:
             if reserva["checkout_date"] == fecha_hoy:
-                revisarPerro(reserva["reference_reservation_id"], propertyID)
+                revisarPerro(reserva["reference_reservation_id"], propertyID,token)
                 logging.info(f"Reserva con salida hoy encontrada: {reserva}")
                 return True
         logging.info(f"No hay reservas con salida para hoy en la propiedad {propertyID}")
@@ -90,7 +90,7 @@ def haySalidahoy(propertyID, token):
         logging.error(f"Error al consultar reservas para propiedad {propertyID}: {str(e)}")
         raise
 
-def revisarPerro(idReserva, propertyID):
+def revisarPerro(idReserva, propertyID,token):
     global hostaway_token  # Usa la variable global para el token de Hostaway
     url = f"https://api.hostaway.com/v1/financeField/{idReserva}"
     headers = {
@@ -195,7 +195,7 @@ def main(myTimer: func.TimerRequest) -> None:
                 else:
                     logging.info(f"No hay salida hoy para la propiedad {propertyID}")
             except Exception as e:
-                logging.error(f"Error procesando propiedad {propertyID}: {str(e)}")
+                logging.error(f"Error e propiedad {propertyID}: {str(e)}")
                 updates_log.append(f"Error en {propertyID}: {str(e)}")
 
     except Exception as e:
