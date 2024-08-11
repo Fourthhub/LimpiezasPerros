@@ -6,10 +6,12 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 URL = "https://api.breezeway.io/"
+URL_HOSTAWAY_TOKEN = "https://api.hostaway.com/oauth/token"  # Define la URL para obtener el token de Hostaway
 CLIENT_ID = "vn7uqu3ubj9zspgz16g0fff3g553vnd7"
 CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
 COMPANY_ID = 8172
 fecha_hoy = ""
+hostaway_token = ""  # Variable global para el token de Hostaway
 
 # Configura la zona horaria de España
 def fecha():
@@ -28,6 +30,24 @@ def fecha():
     fecha_hoy = fecha_hoy.strftime("%Y-%m-%d")
     logging.debug(f"Fecha calculada: {fecha_hoy}")
     return fecha_hoy
+
+def obtener_acceso_hostaway():
+    global hostaway_token  # Usa la variable global
+    try:
+        payload = {
+            "grant_type": "client_credentials",
+            "client_id": "81585",
+            "client_secret": "0e3c059dceb6ec1e9ec6d5c6cf4030d9c9b6e5b83d3a70d177cf66838694db5f",
+            "scope": "general"
+        }
+        headers = {'Content-type': "application/x-www-form-urlencoded", 'Cache-control': "no-cache"}
+        response = requests.post(URL_HOSTAWAY_TOKEN, data=payload, headers=headers)
+        response.raise_for_status()
+        hostaway_token = response.json()["access_token"]  # Almacena el token en la variable global
+        logging.info("Token de Hostaway obtenido con éxito.")
+    except requests.RequestException as e:
+        logging.error(f"Error al obtener el token de acceso de Hostaway: {str(e)}")
+        raise
 
 def conexionBreezeway():
     endpoint = URL + "public/auth/v1/"
@@ -53,7 +73,7 @@ def haySalidahoy(propertyID, token):
     endpoint = URL + f"public/inventory/v1/reservation/external-id?reference_property_id={propertyID}"
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'JWT {token}'  # Asegúrate de que este es el tipo de token correcto
+        'Authorization': f'JWT {token}'  # Usa el token de Breezeway proporcionado
     }
     try:
         response = requests.get(endpoint, headers=headers)
@@ -61,7 +81,7 @@ def haySalidahoy(propertyID, token):
         reservas = response.json()
         for reserva in reservas:
             if reserva["checkout_date"] == fecha_hoy:
-                revisarPerro(reserva["reference_reservation_id"], propertyID, token)
+                revisarPerro(reserva["reference_reservation_id"], propertyID)
                 logging.info(f"Reserva con salida hoy encontrada: {reserva}")
                 return True
         logging.info(f"No hay reservas con salida para hoy en la propiedad {propertyID}")
@@ -70,10 +90,11 @@ def haySalidahoy(propertyID, token):
         logging.error(f"Error al consultar reservas para propiedad {propertyID}: {str(e)}")
         raise
 
-def revisarPerro(idReserva, propertyID, token):
+def revisarPerro(idReserva, propertyID):
+    global hostaway_token  # Usa la variable global para el token de Hostaway
     url = f"https://api.hostaway.com/v1/financeField/{idReserva}"
     headers = {
-        'Authorization': f"Bearer {token}",  # Asegúrate de que este es el tipo de token correcto
+        'Authorization': f"Bearer {hostaway_token}",  # Usa la variable global
         'Content-type': "application/json",
         'Cache-control': "no-cache",
     }
@@ -144,11 +165,13 @@ def conseguirPropiedades(token):
         raise
 
 def main(myTimer: func.TimerRequest) -> None:
+    global hostaway_token  # Usa la variable global para el token de Hostaway
     logging.info("Iniciando la función principal")
     
-    # Obtener el token de autenticación
+    # Obtener el token de autenticación de Hostaway
     try:
-        token = conexionBreezeway()
+        obtener_acceso_hostaway()  # Obtiene y almacena el token en la variable global
+        token = conexionBreezeway()  # Obtiene el token de Breezeway
         updates_log = []
         fecha_hoy = fecha()
 
@@ -177,4 +200,4 @@ def main(myTimer: func.TimerRequest) -> None:
 
     except Exception as e:
         logging.error(f"Error general: {str(e)}")
-        raise BaseException("Error al acceder a Breezeway")
+        raise BaseException("Error al acceder a los servicios")
