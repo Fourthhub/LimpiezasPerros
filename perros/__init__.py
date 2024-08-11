@@ -115,7 +115,7 @@ def revisarPerro(idReserva, propertyID,token):
 
 def marcarPerro(propertyID, token):
     fecha_hoy = fecha()  # Asegúrate de que se actualiza
-    endpoint = URL + f"/public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={fecha_hoy},{fecha_hoy}"
+    endpoint = URL + f"public/inventory/v1/task/?reference_property_id={propertyID}&scheduled_date={fecha_hoy},{fecha_hoy}"
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'JWT {token}'
