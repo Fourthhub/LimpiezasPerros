@@ -189,7 +189,7 @@ def marcarCuna(propertyID, token, nombreCliente):
     payload = {
         "rate_type": "piece",
         "assign_default_workers": False,
-        "reference_property_id": propertyID,   # (no set)
+        "reference_property_id": propertyID,
         "name": nombre,
         "scheduled_date": fecha_target
     }
@@ -213,7 +213,6 @@ def marcarPerro(propertyID, token, nombreCliente):
         response.raise_for_status()
         data = response.json().get('results', [])
         for element in data:
-            # Ajusta el template_id si procede
             if element.get("template_id") == 101204:
                 taskID = element["id"]
                 nombreTarea = element.get("name", "")
@@ -288,8 +287,9 @@ def main(myTimer: func.TimerRequest) -> None:
 
         # Procesar propiedades
         for propiedad in propiedades:
-            propertyID = propiedad.get("reference_property_id")
-            if propertyID is None or propiedad.get("status") != "active":
+            # Mantener tu estilo: índices, no .get
+            propertyID = propiedad["reference_property_id"]
+            if propiedad["status"] != "active":
                 logging.debug(f"Propiedad {propertyID} inactiva o no válida.")
                 continue
 
