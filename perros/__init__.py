@@ -17,6 +17,15 @@ hostaway_token = ""  # Token de Hostaway
 
 HTTP_TIMEOUT = (5, 25)  # (conexión, lectura)
 
+# --- Helpers mínimos para normalizar JSON ---
+def _results(obj):
+    # Devuelve obj["results"] si existe; si no, devuelve el propio obj (lista ya utilizable)
+    return obj["results"] if isinstance(obj, dict) and "results" in obj else obj
+
+def _result(obj):
+    # Igual, pero para claves 'result'
+    return obj["result"] if isinstance(obj, dict) and "result" in obj else obj
+
 def fecha():
     """
     Respeta tu comportamiento original:
@@ -91,12 +100,12 @@ def haySalidahoy(propertyID, token):
     try:
         response = requests.get(endpoint, headers=headers, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
-        reservas = response.json().get('results', [])
+        reservas = _results(response.json())  # <--- normaliza
         for reserva in reservas:
-            if reserva.get("checkout_date") == fecha_target:
+            if reserva["checkout_date"] == fecha_target:
                 nombreCliente = nombre_principal(reserva)
-                revisarPerro(reserva.get("reference_reservation_id"), propertyID, token, nombreCliente)
-                logging.info(f"Reserva con salida hoy encontrada: {reserva.get('reference_reservation_id')}")
+                revisarPerro(reserva["reference_reservation_id"], propertyID, token, nombreCliente)
+                logging.info(f"Reserva con salida hoy encontrada: {reserva['reference_reservation_id']}")
                 return True
         logging.info(f"No hay reservas con salida para hoy en la propiedad {propertyID}")
         return False
@@ -114,12 +123,12 @@ def hayEntradaHoy(propertyID, token):
     try:
         response = requests.get(endpoint, headers=headers, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
-        reservas = response.json().get('results', [])
+        reservas = _results(response.json())  # <--- normaliza
         for reserva in reservas:
-            if reserva.get("checkin_date") == fecha_target:
+            if reserva["checkin_date"] == fecha_target:
                 nombreCliente = nombre_principal(reserva)
-                revisarCuna(reserva.get("reference_reservation_id"), propertyID, token, nombreCliente)
-                logging.info(f"Reserva con entrada hoy encontrada: {reserva.get('reference_reservation_id')}")
+                revisarCuna(reserva["reference_reservation_id"], propertyID, token, nombreCliente)
+                logging.info(f"Reserva con entrada hoy encontrada: {reserva['reference_reservation_id']}")
                 return True
         logging.info(f"No hay reservas con entrada para hoy en la propiedad {propertyID}")
         return False
@@ -138,7 +147,7 @@ def revisarCuna(idReserva, propertyID, token, nombreCliente):
     try:
         response = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
-        data = response.json().get('result', [])
+        data = _result(response.json())  # <--- normaliza
         for element in data:
             alias = (element.get('alias') or "").lower()
             name = (element.get('name') or "").lower()
@@ -163,7 +172,7 @@ def revisarPerro(idReserva, propertyID, token, nombreCliente):
     try:
         response = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
-        data = response.json().get('result', [])
+        data = _result(response.json())  # <--- normaliza
         for element in data:
             alias = (element.get('alias') or "").lower()
             name = (element.get('name') or "").lower()
@@ -211,8 +220,8 @@ def marcarPerro(propertyID, token, nombreCliente):
     try:
         response = requests.get(endpoint, headers=headers, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
-        data = response.json().get('results', [])
-        for element in data:
+        tareas = _results(response.json())  # <--- normaliza
+        for element in tareas:
             if element.get("template_id") == 101204:
                 taskID = element["id"]
                 nombreTarea = element.get("name", "")
@@ -249,22 +258,20 @@ def conseguirPropiedades(token):
     try:
         response = requests.get(endpoint, headers=headers, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
-        data = response.json()
-        raw = data.get("results", data if isinstance(data, list) else [])
+        props = _results(response.json())  # <--- normaliza
+        # Asegura que iteramos dicts (por si viniera alguna sublista)
+        propiedades = []
+        if isinstance(props, dict):
+            propiedades = [props]
+        elif isinstance(props, list):
+            for it in props:
+                if isinstance(it, dict):
+                    propiedades.append(it)
+                elif isinstance(it, list):
+                    propiedades.extend([i for i in it if isinstance(i, dict)])
 
-        # Normaliza a lista de dicts (aplana si vienen sub-listas)
-        props = []
-        if isinstance(raw, dict):
-            props = [raw]
-        elif isinstance(raw, list):
-            for item in raw:
-                if isinstance(item, dict):
-                    props.append(item)
-                elif isinstance(item, list):
-                    props.extend([i for i in item if isinstance(i, dict)])
-
-        logging.info(f"Propiedades obtenidas con éxito: {len(props)}")
-        return props
+        logging.info(f"Propiedades obtenidas con éxito: {len(propiedades)}")
+        return propiedades
     except requests.exceptions.RequestException as e:
         logging.error(f"Error al conseguir propiedades: {str(e)}")
         raise
@@ -287,7 +294,7 @@ def main(myTimer: func.TimerRequest) -> None:
 
         # Procesar propiedades
         for propiedad in propiedades:
-            # Mantener tu estilo: índices, no .get
+            # Mantén acceso por índice, como pediste
             propertyID = propiedad["reference_property_id"]
             if propiedad["status"] != "active":
                 logging.debug(f"Propiedad {propertyID} inactiva o no válida.")
