@@ -251,9 +251,21 @@ def conseguirPropiedades(token):
         response = requests.get(endpoint, headers=headers, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
         data = response.json()
-        results = data.get("results", data if isinstance(data, list) else [])
-        logging.info(f"Propiedades obtenidas con éxito: {len(results)}")
-        return results
+        raw = data.get("results", data if isinstance(data, list) else [])
+
+        # Normaliza a lista de dicts (aplana si vienen sub-listas)
+        props = []
+        if isinstance(raw, dict):
+            props = [raw]
+        elif isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, dict):
+                    props.append(item)
+                elif isinstance(item, list):
+                    props.extend([i for i in item if isinstance(i, dict)])
+
+        logging.info(f"Propiedades obtenidas con éxito: {len(props)}")
+        return props
     except requests.exceptions.RequestException as e:
         logging.error(f"Error al conseguir propiedades: {str(e)}")
         raise
