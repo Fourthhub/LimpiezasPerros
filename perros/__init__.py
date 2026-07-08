@@ -4,6 +4,7 @@ import logging
 import azure.functions as func
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 URL = "https://api.breezeway.io/"
 URL_HOSTAWAY_TOKEN = "https://api.hostaway.com/v1/accessTokens"
@@ -292,27 +293,29 @@ def main(myTimer: func.TimerRequest) -> None:
         propiedades = conseguirPropiedades(token_breezeway)
         logging.info(f"Propiedades obtenidas: {len(propiedades)} encontradas")
 
-        # Procesar propiedades
-        for propiedad in propiedades:
-            # Mantén acceso por índice, como pediste
+        propiedades_activas = [p for p in propiedades if p["status"] == "active"]
+
+        def procesar(propiedad):
             propertyID = propiedad["reference_property_id"]
-            if propiedad["status"] != "active":
-                logging.debug(f"Propiedad {propertyID} inactiva o no válida.")
-                continue
+            salida = haySalidahoy(propertyID, token_breezeway)
+            entrada = hayEntradaHoy(propertyID, token_breezeway)
+            return propertyID, salida, entrada
 
-            try:
-                salida = haySalidahoy(propertyID, token_breezeway)
-                entrada = hayEntradaHoy(propertyID, token_breezeway)
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(procesar, p): p["reference_property_id"] for p in propiedades_activas}
 
-                if salida:
-                    logging.info(f"Salida encontrada para la propiedad {propertyID}")
-                if entrada:
-                    logging.info(f"Entrada encontrada para la propiedad {propertyID}")
-                if not (salida or entrada):
-                    logging.info(f"No hay salida ni entrada hoy para la propiedad {propertyID}")
-
-            except Exception as e:
-                logging.error(f"Error en propiedad {propertyID}: {str(e)}")
+            for future in as_completed(futures):
+                propertyID = futures[future]
+                try:
+                    propertyID, salida, entrada = future.result()
+                    if salida:
+                        logging.info(f"Salida encontrada para la propiedad {propertyID}")
+                    if entrada:
+                        logging.info(f"Entrada encontrada para la propiedad {propertyID}")
+                    if not (salida or entrada):
+                        logging.info(f"No hay salida ni entrada hoy para la propiedad {propertyID}")
+                except Exception as e:
+                    logging.error(f"Error en propiedad {propertyID}: {str(e)}")
 
     except Exception as e:
         logging.error(f"Error general: {str(e)}")
