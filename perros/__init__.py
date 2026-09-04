@@ -1,6 +1,7 @@
 import requests
 import json
 import logging
+import os
 import azure.functions as func
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -46,8 +47,8 @@ def obtener_acceso_hostaway():
     try:
         payload = {
             "grant_type": "client_credentials",
-            "client_id": "81585",
-            "client_secret": "0e3c059dceb6ec1e9ec6d5c6cf4030d9c9b6e5b83d3a70d177cf66838694db5f",
+            "client_id": os.environ["hostaway_client_id"],
+            "client_secret": os.environ["hostaway_client_secret"],
             "scope": "general"
         }
         headers = {
