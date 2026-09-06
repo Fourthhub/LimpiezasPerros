@@ -123,11 +123,10 @@ def reservasDeLaPropiedad(propertyID, token):
     reservas = _results(response.json())  # <--- normaliza
     return [r for r in reservas if str(r.get("reference_reservation_id") or "").isdigit()]
 
-def revisarCuna(idReserva, propertyID, token, nombreCliente, idReservaBreezeway=None):
-    """Devuelve (tiene_cuna, tarea_vinculada). No loguea nada aqui: se ejecuta
-    en un hilo del ThreadPoolExecutor y ese logging no llega a Application
-    Insights (ver nota en main()); el resultado se devuelve para que lo loguee
-    el hilo principal."""
+def cargosDeLaReserva(idReserva):
+    """Los financeField de una reserva. Se pide una sola vez por reserva: en una
+    salida hay que mirar dos cargos distintos (pet fee y cuna) y antes eso
+    suponia dos peticiones identicas a Hostaway."""
     global hostaway_token
     url = f"https://api.hostaway.com/v1/financeField/{idReserva}"
     headers = {
@@ -137,39 +136,32 @@ def revisarCuna(idReserva, propertyID, token, nombreCliente, idReservaBreezeway=
     }
     response = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
     response.raise_for_status()
-    data = _result(response.json())  # <--- normaliza
-    for element in data:
+    return _result(response.json()) or []  # <--- normaliza
+
+def _tiene_cuna(cargos):
+    # En produccion el cargo llega como name='otherFees' con alias='Cuna'.
+    for element in cargos:
         alias = (element.get('alias') or "").lower()
         name = (element.get('name') or "").lower()
         if alias == "cuna" or "cuna" in name:
-            _taskId, vinculada = marcarCuna(propertyID, token, nombreCliente, idReservaBreezeway)
-            return True, vinculada
-    return False, False
+            return True
+    return False
 
-def revisarPerro(idReserva, propertyID, token, nombreCliente):
-    """Igual que revisarCuna pero para el cargo de pet fee."""
-    global hostaway_token
-    url = f"https://api.hostaway.com/v1/financeField/{idReserva}"
-    headers = {
-        'Authorization': f"Bearer {hostaway_token}",
-        'Content-type': "application/json",
-        'Cache-control': "no-cache",
-    }
-    response = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
-    response.raise_for_status()
-    data = _result(response.json())  # <--- normaliza
-    for element in data:
+def _tiene_petfee(cargos):
+    # En produccion el cargo llega como name='petFee' con alias='Mascota'.
+    for element in cargos:
         alias = (element.get('alias') or "").lower()
         name = (element.get('name') or "").lower()
         if alias == "petfee" or "pet fee" in name or name == "petfee":
-            tarea_marcada = marcarPerro(propertyID, token, nombreCliente)
-            return True, tarea_marcada
-    return False, False
+            return True
+    return False
 
-def marcarCuna(propertyID, token, nombreCliente, idReservaBreezeway=None):
-    """Crea la tarea de llevar cuna y, si conocemos el id interno de la reserva
+def marcarCuna(propertyID, token, nombreCliente, idReservaBreezeway=None, accion="Llevar"):
+    """Crea la tarea de cuna del dia y, si conocemos el id interno de la reserva
     en Breezeway, la deja vinculada a ella (así la tarea acompaña a la reserva
     en vez de quedar suelta en la propiedad).
+
+    'accion' es "Llevar" en la entrada y "Recoger" en la salida.
 
     Devuelve (taskId, vinculada)."""
     fecha_target = fecha()
@@ -179,7 +171,7 @@ def marcarCuna(propertyID, token, nombreCliente, idReservaBreezeway=None):
         "content-type": "application/json",
         'Authorization': f'JWT {token}'
     }
-    nombre = f"Llevar Cuna {nombreCliente}".strip()
+    nombre = f"{accion} Cuna {nombreCliente}".strip()
     payload = {
         "rate_type": "piece",
         "assign_default_workers": False,
@@ -313,9 +305,19 @@ def procesar(propiedad, token_breezeway):
         nombreCliente = nombre_principal(reserva)
 
         if reserva.get("checkout_date") == fecha_target:
+            # En la salida miramos dos cosas sobre los MISMOS cargos: si hubo
+            # perro (se marca la limpieza) y si hubo cuna (hay que recogerla).
             evento = {"idReserva": idReserva}
             try:
-                evento["petfee"], evento["tarea_marcada"] = revisarPerro(idReserva, propertyID, token_breezeway, nombreCliente)
+                cargos = cargosDeLaReserva(idReserva)
+                evento["petfee"] = _tiene_petfee(cargos)
+                if evento["petfee"]:
+                    evento["tarea_marcada"] = marcarPerro(propertyID, token_breezeway, nombreCliente)
+                evento["cuna"] = _tiene_cuna(cargos)
+                if evento["cuna"]:
+                    _taskId, evento["vinculada"] = marcarCuna(
+                        propertyID, token_breezeway, nombreCliente, reserva.get("id"), accion="Recoger"
+                    )
             except Exception as e:
                 evento["error"] = str(e)
             resultado["salidas"].append(evento)
@@ -323,9 +325,12 @@ def procesar(propiedad, token_breezeway):
         if reserva.get("checkin_date") == fecha_target:
             evento = {"idReserva": idReserva}
             try:
-                evento["cuna"], evento["vinculada"] = revisarCuna(
-                    idReserva, propertyID, token_breezeway, nombreCliente, reserva.get("id")
-                )
+                cargos = cargosDeLaReserva(idReserva)
+                evento["cuna"] = _tiene_cuna(cargos)
+                if evento["cuna"]:
+                    _taskId, evento["vinculada"] = marcarCuna(
+                        propertyID, token_breezeway, nombreCliente, reserva.get("id"), accion="Llevar"
+                    )
             except Exception as e:
                 evento["error"] = str(e)
             resultado["entradas"].append(evento)
@@ -381,42 +386,37 @@ def main(myTimer: func.TimerRequest) -> None:
                     continue
 
                 for salida in resultado["salidas"]:
+                    ref = f"Propiedad {propertyID}, salida de la reserva {salida['idReserva']}"
                     if "error" in salida:
-                        logging.error(
-                            f"Propiedad {propertyID}: error revisando perro para reserva "
-                            f"{salida['idReserva']}: {salida['error']}"
-                        )
-                    elif salida.get("petfee") and salida.get("tarea_marcada"):
-                        logging.info(
-                            f"Propiedad {propertyID}: salida con pet fee (reserva {salida['idReserva']}), "
-                            f"tarea de limpieza marcada."
-                        )
+                        logging.error(f"{ref}: error al revisarla: {salida['error']}")
+                        continue
+
+                    if salida.get("petfee") and salida.get("tarea_marcada"):
+                        logging.info(f"{ref}: con pet fee, tarea de limpieza marcada.")
                     elif salida.get("petfee"):
                         logging.warning(
-                            f"Propiedad {propertyID}: pet fee encontrado (reserva {salida['idReserva']}) pero "
-                            f"no había ninguna tarea de limpieza que marcar (¿aún no creada en Breezeway?)."
+                            f"{ref}: pet fee encontrado pero no había ninguna tarea de limpieza "
+                            f"que marcar (¿aún no creada en Breezeway?)."
                         )
-                    else:
-                        logging.info(f"Propiedad {propertyID}: salida sin pet fee (reserva {salida['idReserva']}).")
+
+                    if salida.get("cuna") and salida.get("vinculada"):
+                        logging.info(f"{ref}: con cuna, tarea de recogida creada y vinculada a la reserva.")
+                    elif salida.get("cuna"):
+                        logging.warning(f"{ref}: con cuna, tarea de recogida creada pero SIN vincular a la reserva.")
+
+                    if not salida.get("petfee") and not salida.get("cuna"):
+                        logging.info(f"{ref}: sin pet fee ni cuna.")
 
                 for entrada in resultado["entradas"]:
+                    ref = f"Propiedad {propertyID}, entrada de la reserva {entrada['idReserva']}"
                     if "error" in entrada:
-                        logging.error(
-                            f"Propiedad {propertyID}: error revisando cuna para reserva "
-                            f"{entrada['idReserva']}: {entrada['error']}"
-                        )
+                        logging.error(f"{ref}: error al revisarla: {entrada['error']}")
                     elif entrada.get("cuna") and entrada.get("vinculada"):
-                        logging.info(
-                            f"Propiedad {propertyID}: entrada con cuna (reserva {entrada['idReserva']}), "
-                            f"tarea creada y vinculada a la reserva."
-                        )
+                        logging.info(f"{ref}: con cuna, tarea de entrega creada y vinculada a la reserva.")
                     elif entrada.get("cuna"):
-                        logging.warning(
-                            f"Propiedad {propertyID}: entrada con cuna (reserva {entrada['idReserva']}), "
-                            f"tarea creada pero SIN vincular a la reserva."
-                        )
+                        logging.warning(f"{ref}: con cuna, tarea de entrega creada pero SIN vincular a la reserva.")
                     else:
-                        logging.info(f"Propiedad {propertyID}: entrada sin cuna (reserva {entrada['idReserva']}).")
+                        logging.info(f"{ref}: sin cuna.")
 
                 if not resultado["salidas"] and not resultado["entradas"]:
                     logging.info(f"No hay salida ni entrada hoy para la propiedad {propertyID}")
