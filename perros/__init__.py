@@ -9,8 +9,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 URL = "https://api.breezeway.io/"
 URL_HOSTAWAY_TOKEN = "https://api.hostaway.com/v1/accessTokens"
-CLIENT_ID = "vn7uqu3ubj9zspgz16g0fff3g553vnd7"
-CLIENT_SECRET = "6wfbx65utxf2tarrkj2m4097vv3pc40j"
+CLIENT_ID = os.environ["breezeway_client_id"]
+CLIENT_SECRET = os.environ["breezeway_client_secret"]
 COMPANY_ID = 8172
 
 # Variables globales (ojo a su uso en Azure Functions)
