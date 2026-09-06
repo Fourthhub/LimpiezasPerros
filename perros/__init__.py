@@ -185,7 +185,12 @@ def marcarCuna(propertyID, token, nombreCliente, idReservaBreezeway=None):
         "assign_default_workers": False,
         "reference_property_id": propertyID,
         "name": nombre,
-        "scheduled_date": fecha_target
+        "scheduled_date": fecha_target,
+        # OBLIGATORIO aunque la documentacion lo marque como opcional: sin este
+        # campo el API responde 422 "Missing data for required field". Es la
+        # razon por la que esta funcion no ha creado ni una sola tarea desde que
+        # existe (ago-2025): fallaba siempre, y el error se perdia en el hilo.
+        "type_department": "housekeeping",
     }
     response = requests.post(endpoint, json=payload, headers=headers, timeout=HTTP_TIMEOUT)
     response.raise_for_status()
